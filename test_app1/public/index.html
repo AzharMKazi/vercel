@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Order Management</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/supabase-js/2.39.0/umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.min.js"></script>
     <script>
         tailwind.config = {
@@ -224,13 +223,6 @@
     </div>
 
     <script>
-        // Supabase Configuration
-        const SUPABASE_URL = process?.env?.NEXT_PUBLIC_SUPABASE_URL || 'YOUR_SUPABASE_URL';
-        const SUPABASE_ANON_KEY = process?.env?.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'YOUR_SUPABASE_ANON_KEY';
-        
-        // Initialize Supabase client
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
         // App State
         let currentScreen = 'home';
         let orders = [];
@@ -247,17 +239,19 @@
         const successMessage = document.getElementById('successMessage');
         const errorMessage = document.getElementById('errorMessage');
 
+        // API Base URL - will use Vercel serverless functions
+        const API_BASE = '/api';
+
         // Initialize App
         async function initApp() {
             try {
                 // Set today's date as default
                 document.getElementById('orderDate').valueAsDate = new Date();
                 
-                // Test Supabase connection
-                const { data, error } = await supabase.from('orders').select('count', { count: 'exact', head: true });
-                
-                if (error && error.code !== 'PGRST116') {
-                    throw new Error('Failed to connect to Supabase. Please check your configuration.');
+                // Test API connection
+                const response = await fetch(`${API_BASE}/test`);
+                if (!response.ok) {
+                    throw new Error('Failed to connect to API. Please check your configuration.');
                 }
 
                 // Show main content
@@ -300,19 +294,26 @@
         // Order Management
         async function createOrder(orderData) {
             try {
-                const { data, error } = await supabase
-                    .from('orders')
-                    .insert([orderData])
-                    .select();
+                const response = await fetch(`${API_BASE}/orders`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(orderData)
+                });
 
-                if (error) throw error;
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || 'Failed to create order');
+                }
 
+                const data = await response.json();
                 showSuccess('Order created successfully!');
                 orderForm.reset();
                 document.getElementById('orderDate').valueAsDate = new Date();
                 document.getElementById('totalAmount').value = '';
                 
-                return data[0];
+                return data;
             } catch (error) {
                 showError('Failed to create order: ' + error.message);
                 throw error;
@@ -321,13 +322,12 @@
 
         async function loadOrders() {
             try {
-                const { data, error } = await supabase
-                    .from('orders')
-                    .select('*')
-                    .order('created_at', { ascending: false });
+                const response = await fetch(`${API_BASE}/orders`);
+                if (!response.ok) {
+                    throw new Error('Failed to load orders');
+                }
 
-                if (error) throw error;
-
+                const data = await response.json();
                 orders = data || [];
                 filteredOrders = [...orders];
                 renderOrders();
@@ -370,37 +370,28 @@
 
         async function loadAnalytics() {
             try {
-                const { data, error } = await supabase
-                    .from('orders')
-                    .select('*');
+                const response = await fetch(`${API_BASE}/analytics`);
+                if (!response.ok) {
+                    throw new Error('Failed to load analytics');
+                }
 
-                if (error) throw error;
-
-                const totalOrders = data.length;
-                const totalRevenue = data.reduce((sum, order) => sum + (order.total_amount || 0), 0);
-
-                document.getElementById('totalOrders').textContent = totalOrders;
-                document.getElementById('totalRevenue').textContent = `₹${totalRevenue.toLocaleString()}`;
+                const data = await response.json();
+                
+                document.getElementById('totalOrders').textContent = data.totalOrders;
+                document.getElementById('totalRevenue').textContent = `₹${data.totalRevenue.toLocaleString()}`;
 
                 // Create charts
-                createSalesChart(data);
-                createPaymentChart(data);
+                createSalesChart(data.salesByDate);
+                createPaymentChart(data.paymentCounts);
 
             } catch (error) {
                 showError('Failed to load analytics: ' + error.message);
             }
         }
 
-        function createSalesChart(data) {
+        function createSalesChart(salesByDate) {
             const ctx = document.getElementById('salesChart').getContext('2d');
             
-            // Group by date
-            const salesByDate = data.reduce((acc, order) => {
-                const date = new Date(order.date).toLocaleDateString();
-                acc[date] = (acc[date] || 0) + order.total_amount;
-                return acc;
-            }, {});
-
             const labels = Object.keys(salesByDate).slice(-7); // Last 7 days
             const values = labels.map(date => salesByDate[date] || 0);
 
@@ -434,15 +425,9 @@
             });
         }
 
-        function createPaymentChart(data) {
+        function createPaymentChart(paymentCounts) {
             const ctx = document.getElementById('paymentChart').getContext('2d');
             
-            // Group by payment type
-            const paymentCounts = data.reduce((acc, order) => {
-                acc[order.payment_type] = (acc[order.payment_type] || 0) + 1;
-                return acc;
-            }, {});
-
             const labels = Object.keys(paymentCounts);
             const values = Object.values(paymentCounts);
             const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
@@ -520,7 +505,6 @@
         orderForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             
-            const formData = new FormData(orderForm);
             const orderData = {
                 customer_name: document.getElementById('customerName').value,
                 date: document.getElementById('orderDate').value,
