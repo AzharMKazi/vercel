@@ -1,11 +1,12 @@
 {
-  "name": "order-management-app",
-  "version": "1.0.0",
   "scripts": {
-    "dev": "vercel dev",
-    "build": "vercel build"
+    "build": "echo 'No build needed for static site'"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.39.0"
+    "@supabase/supabase-js": "^2.39.0",
+    "chart.js": "^4.4.0"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.1"
   }
 }
