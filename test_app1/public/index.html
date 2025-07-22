@@ -240,6 +240,8 @@
         const successMessage = document.getElementById('successMessage');
         const errorMessage = document.getElementById('errorMessage');
 
+        let chartInstance = null; // Store chart globally
+
         // API Base URL - will use Vercel serverless functions
         const API_BASE = '/api';
 
@@ -396,7 +398,11 @@
             const labels = Object.keys(salesByDate).slice(-7); // Last 7 days
             const values = labels.map(date => salesByDate[date] || 0);
 
-            new Chart(ctx, {
+            // ✅ Destroy previous chart if it exists
+            if (chartInstance !== null) {
+                chartInstance.destroy();
+            }
+            chartInstance = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: labels,
@@ -432,8 +438,11 @@
             const labels = Object.keys(paymentCounts);
             const values = Object.values(paymentCounts);
             const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
-
-            new Chart(ctx, {
+            // ✅ Destroy previous chart if it exists
+            if (chartInstance !== null) {
+                chartInstance.destroy();
+            }
+            chartInstance = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
                     labels: labels,
